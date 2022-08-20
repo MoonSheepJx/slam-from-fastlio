@@ -204,6 +204,7 @@ bool buffer_to_meas(MeasureGroup &meas) //把buffer数据拿到meas中
         }
         else
         {
+            scan_num++;
             lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / double(1000);  //最后时间和偏移时间要搞清楚
             lidar_mean_scantime += (meas.lidar->points.back().curvature / double(1000) - lidar_mean_scantime)/scan_num;//更新平均扫描时间
         }
@@ -564,7 +565,7 @@ int main(int argc, char** argv)
     while(status)
     {
         ros::spinOnce();
-        if(buffer_to_meas(measurement))    //把imu信息从缓存器转到meas变量中 （注意！ 是地址传递，虽然动形参，但是等于动实参）
+        while(buffer_to_meas(measurement))    //把imu信息从缓存器转到meas变量中 （注意！ 是地址传递，虽然动形参，但是等于动实参）
         {
             if(flg_first_scan)
             {
@@ -585,190 +586,190 @@ int main(int argc, char** argv)
                 cout << "------" << endl;
             }
 
-            // StateGroup state_propagate(g_state);
-            // pos_lid = state_propagate.Pos + state_propagate.Rot * state_propagate.T_L_I;  //在世界坐标系下看雷达坐标原点——是三维向量(偏移向量*旋转 + 平移向量)（不管lidar和imu有没有rot，都是这个，因为是看原点——用向量考虑）
+            StateGroup state_propagate(g_state);
+            pos_lid = state_propagate.Pos + state_propagate.Rot * state_propagate.T_L_I;  //在世界坐标系下看雷达坐标原点——是三维向量(偏移向量*旋转 + 平移向量)（不管lidar和imu有没有rot，都是这个，因为是看原点——用向量考虑）
             
-            // flg_EKF_inited = (measurement.lidar_beg_time - first_lidar_time) < INIT_TIME ? false : true;
+            flg_EKF_inited = (measurement.lidar_beg_time - first_lidar_time) < INIT_TIME ? false : true;
 
-            // lasermap_fov_segment(); 
-            // downSizeFilterSurf.setInputCloud(pointcloud_undistort);
-            // downSizeFilterSurf.filter(*feats_down_body);                //体素滤波后的点云feats_down_body---是雷达坐标系下的点云
-            // feats_down_size = feats_down_body->points.size();
-            // initialize_map_kdtree(feats_down_size);                     //初始化ikdtree
-            // if(initialized_map_kdtree_flag == true) {continue;}
+            lasermap_fov_segment(); 
+            downSizeFilterSurf.setInputCloud(pointcloud_undistort);
+            downSizeFilterSurf.filter(*feats_down_body);                //体素滤波后的点云feats_down_body---是雷达坐标系下的点云
+            feats_down_size = feats_down_body->points.size();
+            initialize_map_kdtree(feats_down_size);                     //初始化ikdtree
+            if(initialized_map_kdtree_flag == true) {continue;}
 
-            // int kdtree_size = ikdtree.size();
-            // //int kdtree_size = ikdtree.validnum();
-            // PointCloudXYZI::Ptr coeffSel_tmpt(new PointCloudXYZI(*feats_down_body));        
-            // PointCloudXYZI::Ptr feats_down_update(new PointCloudXYZI(*feats_down_body));    
-            // std::vector<double> res_last(feats_down_size, 1000.0);                            //初始化容器，feats_down_size个1000————用来装每个点的残差
-            // if(kdtree_size >= 5)
-            // {
-            //     std::vector<bool>           point_selected_surf(feats_down_size, true);
-            //     Nearest_Points.resize(feats_down_size);                //初始化而已
-            //     feats_down_world->resize(feats_down_size);
-            //     int rematch_num = 0;
-            //     bool rematch_en = false;
-            //     flg_EKF_converged = false;
-            //     deltaR = 0.0; deltaT = 0.0;
-            //     //double maximum_pt_range = 0.0;
+            int kdtree_size = ikdtree.size();
+            //int kdtree_size = ikdtree.validnum();
+            PointCloudXYZI::Ptr coeffSel_tmpt(new PointCloudXYZI(*feats_down_body));        
+            PointCloudXYZI::Ptr feats_down_update(new PointCloudXYZI(*feats_down_body));    
+            std::vector<double> res_last(feats_down_size, 1000.0);                            //初始化容器，feats_down_size个1000————用来装每个点的残差
+            if(kdtree_size >= 5)
+            {
+                std::vector<bool>           point_selected_surf(feats_down_size, true);
+                Nearest_Points.resize(feats_down_size);                //初始化而已
+                feats_down_world->resize(feats_down_size);
+                int rematch_num = 0;
+                bool rematch_en = false;
+                flg_EKF_converged = false;
+                deltaR = 0.0; deltaT = 0.0;
+                //double maximum_pt_range = 0.0;
 
-            //     /*** ESIKF ***/
-            //     for( iterCount = 0; iterCount < NUM_MAX_ITERATIONS; iterCount++)         
-            //     {
-            //         laserCloudOri->clear();         //laserCloudOri是跟踪到了哪些点（最近邻成功找到，平面成功拟合，残差足够小）（雷达坐标系下）
-            //         coeffSel->clear();
-            //         /*** search the nearest point of each point and cal loss between them ***/
-            //         for(int i = 0; i < feats_down_size; i++)                              
-            //         {
-            //             PointNomalType &point_body  = feats_down_body->points[i];   Eigen::Vector3d p_body(point_body.x, point_body.y, point_body.z);
-            //             PointNomalType &point_world = feats_down_update->points[i];  //初始化--一会把点转到世界坐标下
-            //             double body_pt_disTo_worldOri = sqrt(point_body.x*point_body.x + point_body.y*point_body.y + point_body.z*point_body.z);
-            //             //maximum_pt_range = std::max(body_pt_disTo_worldOri, maximum_pt_range);
-            //             pointBodyToWorld(&point_body, &point_world);//把点云从雷达坐标系转到世界坐标系
+                /*** ESIKF ***/
+                for( iterCount = 0; iterCount < NUM_MAX_ITERATIONS; iterCount++)         
+                {
+                    laserCloudOri->clear();         //laserCloudOri是跟踪到了哪些点（最近邻成功找到，平面成功拟合，残差足够小）（雷达坐标系下）
+                    coeffSel->clear();
+                    /*** search the nearest point of each point and cal loss between them ***/
+                    for(int i = 0; i < feats_down_size; i++)                              
+                    {
+                        PointNomalType &point_body  = feats_down_body->points[i];   Eigen::Vector3d p_body(point_body.x, point_body.y, point_body.z);
+                        PointNomalType &point_world = feats_down_update->points[i];  //初始化--一会把点转到世界坐标下
+                        double body_pt_disTo_worldOri = sqrt(point_body.x*point_body.x + point_body.y*point_body.y + point_body.z*point_body.z);
+                        //maximum_pt_range = std::max(body_pt_disTo_worldOri, maximum_pt_range);
+                        pointBodyToWorld(&point_body, &point_world);//把点云从雷达坐标系转到世界坐标系
 
-            //             std::vector<float> pointSearchSqDis(5);
-            //             auto &points_near = Nearest_Points[i];      //points_near容器初始化 而以
-            //             if(iterCount == 0 || rematch_en)
-            //             {
-            //                 //point_selected_surf[i] = true;
-            //                 ikdtree.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);   //基准点,找几个点,这几个点,这几个点的距离   //最近点放到points_near
-            //                 //float max_distance = pointSearchSqDis[NUM_MATCH_POINTS - 1];
-            //                 //if(max_distance > 1) {point_selected_surf[i] = false;}
-            //                 point_selected_surf[i] = points_near.size() < NUM_MATCH_POINTS        ? false
-            //                                          : pointSearchSqDis[NUM_MATCH_POINTS - 1] > 3 ? false
-            //                                                                                       : true;
-            //             }
-            //             if(point_selected_surf[i] == false){continue;}
+                        std::vector<float> pointSearchSqDis(5);
+                        auto &points_near = Nearest_Points[i];      //points_near容器初始化 而以
+                        if(iterCount == 0 || rematch_en)
+                        {
+                            //point_selected_surf[i] = true;
+                            ikdtree.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);   //基准点,找几个点,这几个点,这几个点的距离   //最近点放到points_near
+                            //float max_distance = pointSearchSqDis[NUM_MATCH_POINTS - 1];
+                            //if(max_distance > 1) {point_selected_surf[i] = false;}
+                            point_selected_surf[i] = points_near.size() < NUM_MATCH_POINTS        ? false
+                                                     : pointSearchSqDis[NUM_MATCH_POINTS - 1] > 3 ? false
+                                                                                                  : true;
+                        }
+                        if(point_selected_surf[i] == false){continue;}
 
-            //             Eigen::Matrix<float, 4, 1> pabcd;
-            //             point_selected_surf[i] = false;
-            //             if(esti_plane(pabcd, points_near, 0.2f))
-            //             {
-            //                 float pd2 = pabcd(0)*point_world.x + pabcd(1)*point_world.y + pabcd(2)*point_world.z + pabcd(3);//基准点到平面距离（没推出来）
-            //                 //cout << "body_pt_disTo_worldOri = " << body_pt_disTo_worldOri << endl;
-            //                 float s = 1 - 0.9*fabs(pd2) / sqrt(p_body.norm());
-            //                 if(s > 0.9)
-            //                 {
-            //                     point_selected_surf[i] = true;
-            //                     coeffSel_tmpt->points[i].x = pabcd(0);
-            //                     coeffSel_tmpt->points[i].y = pabcd(1);
-            //                     coeffSel_tmpt->points[i].z = pabcd(2);
-            //                     coeffSel_tmpt->points[i].intensity = pd2;
-            //                     res_last[i] = abs(pd2);
-            //                 }
+                        Eigen::Matrix<float, 4, 1> pabcd;
+                        point_selected_surf[i] = false;
+                        if(esti_plane(pabcd, points_near, 0.2f))
+                        {
+                            float pd2 = pabcd(0)*point_world.x + pabcd(1)*point_world.y + pabcd(2)*point_world.z + pabcd(3);//基准点到平面距离（没推出来）
+                            //cout << "body_pt_disTo_worldOri = " << body_pt_disTo_worldOri << endl;
+                            float s = 1 - 0.9*fabs(pd2) / sqrt(p_body.norm());
+                            if(s > 0.9)
+                            {
+                                point_selected_surf[i] = true;
+                                coeffSel_tmpt->points[i].x = pabcd(0);
+                                coeffSel_tmpt->points[i].y = pabcd(1);
+                                coeffSel_tmpt->points[i].z = pabcd(2);
+                                coeffSel_tmpt->points[i].intensity = pd2;
+                                res_last[i] = abs(pd2);
+                            }
 
-            //                 // double acc_distance = body_pt_disTo_worldOri < 500 ? m_maximum_res_dis : 1.0;
-            //                 // if(pd2 < acc_distance)
-            //                 // {
-            //                 //     point_selected_surf[i] = true;
-            //                 //     coeffSel_tmpt->points[i].x = pabcd(0);
-            //                 //     coeffSel_tmpt->points[i].y = pabcd(1);
-            //                 //     coeffSel_tmpt->points[i].z = pabcd(2);
-            //                 //     coeffSel_tmpt->points[i].intensity = pd2;
-            //                 //     res_last[i] = abs(pd2);
-            //                 // }
-            //             }
-            //         }
-            //         double total_residual = 0.0;
-            //         effct_feat_num = 0; 
-            //         for(int i = 0; i < coeffSel_tmpt->points.size(); i++)
-            //         {   
-            //             if(point_selected_surf[i] && (res_last[i] <= 2.0))
-            //             {
-            //                 laserCloudOri->push_back(feats_down_body->points[i]);   //哪些点能成功被计算（最近邻成功找到，平面成功拟合，残差足够小）
-            //                 coeffSel->push_back(coeffSel_tmpt->points[i]);          //离他最近的平面是什么样的，追加进来
-            //                 total_residual = total_residual + res_last[i];
-            //                 effct_feat_num++;
-            //             }
-            //         }
-            //         /*** computation of Measurement Jacobian matrix H and Measurements vector ***/
-            //         Eigen::MatrixXd Hsub(effct_feat_num, 6);    //根据有效残差点数量构建大矩阵(effct_feat_num行， 6列)
-            //         Eigen::VectorXd meas_vec(effct_feat_num);   //观测向量set_initial_state_cov( StatesGroup &state )
-            //         Hsub.setZero();
-            //         for(int i = 0; i < effct_feat_num; i++)
-            //         {
-            //             const PointNomalType &laserCloudOri_Onepoint = laserCloudOri->points[i];   //观测原始点云中的一个点（雷达坐标系下）
-            //             Eigen::Vector3d point_this_be(laserCloudOri_Onepoint.x, laserCloudOri_Onepoint.y, laserCloudOri_Onepoint.z);
-            //             Eigen::Vector3d point_this = g_state.R_L_I * point_this_be + g_state.T_L_I;                             //坐标转换：雷达->局部imu    //因为avia 雷达和imu只有平移
-            //             Eigen::Matrix3d point_this_matrix;
-            //             point_this_matrix << SKEW_SYM_MATRIX(point_this);          //反对称矩阵---imu坐标系下看到的基准点
+                            // double acc_distance = body_pt_disTo_worldOri < 500 ? m_maximum_res_dis : 1.0;
+                            // if(pd2 < acc_distance)
+                            // {
+                            //     point_selected_surf[i] = true;
+                            //     coeffSel_tmpt->points[i].x = pabcd(0);
+                            //     coeffSel_tmpt->points[i].y = pabcd(1);
+                            //     coeffSel_tmpt->points[i].z = pabcd(2);
+                            //     coeffSel_tmpt->points[i].intensity = pd2;
+                            //     res_last[i] = abs(pd2);
+                            // }
+                        }
+                    }
+                    double total_residual = 0.0;
+                    effct_feat_num = 0; 
+                    for(int i = 0; i < coeffSel_tmpt->points.size(); i++)
+                    {   
+                        if(point_selected_surf[i] && (res_last[i] <= 2.0))
+                        {
+                            laserCloudOri->push_back(feats_down_body->points[i]);   //哪些点能成功被计算（最近邻成功找到，平面成功拟合，残差足够小）
+                            coeffSel->push_back(coeffSel_tmpt->points[i]);          //离他最近的平面是什么样的，追加进来
+                            total_residual = total_residual + res_last[i];
+                            effct_feat_num++;
+                        }
+                    }
+                    /*** computation of Measurement Jacobian matrix H and Measurements vector ***/
+                    Eigen::MatrixXd Hsub(effct_feat_num, 6);    //根据有效残差点数量构建大矩阵(effct_feat_num行， 6列)
+                    Eigen::VectorXd meas_vec(effct_feat_num);   //观测向量set_initial_state_cov( StatesGroup &state )
+                    Hsub.setZero();
+                    for(int i = 0; i < effct_feat_num; i++)
+                    {
+                        const PointNomalType &laserCloudOri_Onepoint = laserCloudOri->points[i];   //观测原始点云中的一个点（雷达坐标系下）
+                        Eigen::Vector3d point_this_be(laserCloudOri_Onepoint.x, laserCloudOri_Onepoint.y, laserCloudOri_Onepoint.z);
+                        Eigen::Vector3d point_this = g_state.R_L_I * point_this_be + g_state.T_L_I;                             //坐标转换：雷达->局部imu    //因为avia 雷达和imu只有平移
+                        Eigen::Matrix3d point_this_matrix;
+                        point_this_matrix << SKEW_SYM_MATRIX(point_this);          //反对称矩阵---imu坐标系下看到的基准点
 
-            //             /*** get the normal vector of closest surface/corner ***/
-            //             const PointNomalType &norm_p = coeffSel->points[i];                         //平面参数（包括残差）
-            //             Eigen::Vector3d norm_vec(norm_p.x, norm_p.y, norm_p.z);                     //---原地图点拟合的平面参数
+                        /*** get the normal vector of closest surface/corner ***/
+                        const PointNomalType &norm_p = coeffSel->points[i];                         //平面参数（包括残差）
+                        Eigen::Vector3d norm_vec(norm_p.x, norm_p.y, norm_p.z);                     //---原地图点拟合的平面参数
 
-            //             /*** calculate the Measuremnt Jacobian matrix H ***/
-            //             Eigen::Vector3d C(g_state.Rot.transpose() * norm_vec);
-            //             Eigen::Vector3d A(point_this_matrix * C);  //基准点的反对称
-            //             Hsub.row(i) << VEC_FROM_ARRAY(A), norm_p.x, norm_p.y, norm_p.z;             //Hsub第一行是A(3个数)，平面参数pa，pb，pc
+                        /*** calculate the Measuremnt Jacobian matrix H ***/
+                        Eigen::Vector3d C(g_state.Rot.transpose() * norm_vec);
+                        Eigen::Vector3d A(point_this_matrix * C);  //基准点的反对称
+                        Hsub.row(i) << VEC_FROM_ARRAY(A), norm_p.x, norm_p.y, norm_p.z;             //Hsub第一行是A(3个数)，平面参数pa，pb，pc
 
-            //             /*** Measuremnt: distance to the closest surface/corner ***/
-            //             meas_vec(i) = -norm_p.intensity;                                             //点到平面残差---ESIKF的观测向量-  -z
-            //         }
-            //         Eigen::Vector3d rot_add, t_add;
-            //         Eigen::Matrix<double, DIM_STATE, 1> solution;
-            //         Eigen::MatrixXd K(DIM_STATE, effct_feat_num);
+                        /*** Measuremnt: distance to the closest surface/corner ***/
+                        meas_vec(i) = -norm_p.intensity;                                             //点到平面残差---ESIKF的观测向量-  -z
+                    }
+                    Eigen::Vector3d rot_add, t_add;
+                    Eigen::Matrix<double, DIM_STATE, 1> solution;
+                    Eigen::MatrixXd K(DIM_STATE, effct_feat_num);
 
-            //         /*** Iterative Kalman Filter Update ***/ 
-            //         if(flg_EKF_inited == false)
-            //         {
-            //             cout << "ESIKF update init..." << endl;
-            //             set_initial_state_cov(g_state);
-            //         }
-            //         else
-            //         {
-            //             auto &&Hsub_T = Hsub.transpose();           //Hsub点数行，6列  //Hsub_T 6行，x列
-            //             H_T_H.block<6,6>(0,0) = Hsub_T * Hsub;      // 6*x * x*6 = 6*6
-            //             Eigen::Matrix<double, DIM_STATE, DIM_STATE> &&K_1 = (H_T_H + (g_state.cov/LASER_POINT_COV).inverse()).inverse();    //论文中(14)的括号里面的R为单位矩阵
-            //             K = K_1.block<DIM_STATE, 6>(0,0) * Hsub_T;  //K = (K_1)*H^t //18*6 * 6行 点数个列 = 18*x
+                    /*** Iterative Kalman Filter Update ***/ 
+                    if(flg_EKF_inited == false)
+                    {
+                        cout << "ESIKF update init..." << endl;
+                        set_initial_state_cov(g_state);
+                    }
+                    else
+                    {
+                        auto &&Hsub_T = Hsub.transpose();           //Hsub点数行，6列  //Hsub_T 6行，x列
+                        H_T_H.block<6,6>(0,0) = Hsub_T * Hsub;      // 6*x * x*6 = 6*6
+                        Eigen::Matrix<double, DIM_STATE, DIM_STATE> &&K_1 = (H_T_H + (g_state.cov/LASER_POINT_COV).inverse()).inverse();    //论文中(14)的括号里面的R为单位矩阵
+                        K = K_1.block<DIM_STATE, 6>(0,0) * Hsub_T;  //K = (K_1)*H^t //18*6 * 6行 点数个列 = 18*x
 
-            //             auto vec = state_propagate - g_state;       //误差状态 = 名义状态 - 真实状态    //第一次迭代 state_propagate = g_state，然后更新了g_state，vec就不是0了
-            //             //auto vec = g_state - state_propagate;
-            //             //solution = K * (meas_vec - Hsub * vec.block<6,1>(0,0)) + vec;     //detal x = K(-z - h(x)) // 公式14
-            //             solution = K * meas_vec - K * Hsub * vec.block<6, 1>(0, 0) + vec;
-            //             g_state = g_state + solution;       //真实状态 = 名义状态 + 误差状态
-            //             rot_add = solution.block<3,1>(0,0);         //用来判断是否收敛---增加的旋转 位移 已经不多了，没什么变化---则视为收敛
-            //             t_add = solution.block<3,1>(3,0);   
-            //             flg_EKF_converged = false;
-            //             if( (rot_add.norm()*57.3)<0.01 && (t_add.norm()*100 <0.015) )  //需要调试
-            //             {
-            //                 flg_EKF_converged = true;
-            //             }
-            //             //deltaR = rot_add.norm()*57.3;
-            //             //deltaT = t_add.norm()*100;
-            //         }
+                        auto vec = state_propagate - g_state;       //误差状态 = 名义状态 - 真实状态    //第一次迭代 state_propagate = g_state，然后更新了g_state，vec就不是0了
+                        //auto vec = g_state - state_propagate;
+                        //solution = K * (meas_vec - Hsub * vec.block<6,1>(0,0)) + vec;     //detal x = K(-z - h(x)) // 公式14
+                        solution = K * meas_vec - K * Hsub * vec.block<6, 1>(0, 0) + vec;
+                        g_state = g_state + solution;       //真实状态 = 名义状态 + 误差状态
+                        rot_add = solution.block<3,1>(0,0);         //用来判断是否收敛---增加的旋转 位移 已经不多了，没什么变化---则视为收敛
+                        t_add = solution.block<3,1>(3,0);   
+                        flg_EKF_converged = false;
+                        if( (rot_add.norm()*57.3)<0.01 && (t_add.norm()*100 <0.015) )  //需要调试
+                        {
+                            flg_EKF_converged = true;
+                        }
+                        //deltaR = rot_add.norm()*57.3;
+                        //deltaT = t_add.norm()*100;
+                    }
 
-            //         /*** Rematch Judgement ***/
-            //         //g_state.last_update_time = measurement.lidar_end_time;
-            //         rematch_en = false;
-            //         if(flg_EKF_converged || ((rematch_num == 0) && (iterCount == (NUM_MAX_ITERATIONS-2))))
-            //         {
-            //             rematch_en = true;
-            //             rematch_num++;
-            //         }
+                    /*** Rematch Judgement ***/
+                    //g_state.last_update_time = measurement.lidar_end_time;
+                    rematch_en = false;
+                    if(flg_EKF_converged || ((rematch_num == 0) && (iterCount == (NUM_MAX_ITERATIONS-2))))
+                    {
+                        rematch_en = true;
+                        rematch_num++;
+                    }
 
-            //         /*** Convergence Judgements and Covariance Update ***/
-            //         if(rematch_num >= 2 || (iterCount == (NUM_MAX_ITERATIONS -1)))
-            //         {
-            //             if(flg_EKF_inited == true)
-            //             {
-            //                 /*** Covariance Update ***/ 
-            //                 G.block<DIM_STATE, 6>(0,0) = K*Hsub;        //18行，点数列 * 点数行，6列 =18*6 
-            //                 g_state.cov = (I_STATE - G) * g_state.cov;  //公式15：P = (I-KH) * P    //18*18 = 18*18*18*18
+                    /*** Convergence Judgements and Covariance Update ***/
+                    if(rematch_num >= 2 || (iterCount == (NUM_MAX_ITERATIONS -1)))
+                    {
+                        if(flg_EKF_inited == true)
+                        {
+                            /*** Covariance Update ***/ 
+                            G.block<DIM_STATE, 6>(0,0) = K*Hsub;        //18行，点数列 * 点数行，6列 =18*6 
+                            g_state.cov = (I_STATE - G) * g_state.cov;  //公式15：P = (I-KH) * P    //18*18 = 18*18*18*18
 
-            //             }
-            //             break;
-            //         }
-            //     }
-            // }
-            // if(0)
-            // {
-            //     cout << "esikf:" << endl;
-            //     cout << "rot = \n" << g_state.Rot << "\npos = " << g_state.Pos << "\nvel = " << g_state.Vel << "\n ba:bg=" << g_state.acc_bias << " " << g_state.gyr_bias << endl;
-            // }
-            // /*** add new frame points to map ikdtree ***/
-            // map_incremental();
+                        }
+                        break;
+                    }
+                }
+            }
+            if(0)
+            {
+                cout << "esikf:" << endl;
+                cout << "rot = \n" << g_state.Rot << "\npos = " << g_state.Pos << "\nvel = " << g_state.Vel << "\n ba:bg=" << g_state.acc_bias << " " << g_state.gyr_bias << endl;
+            }
+            /*** add new frame points to map ikdtree ***/
+            map_incremental();
             publish_pre_imu(g_state);
             publish_frame_world(pubLaserCloudFull);
         }
